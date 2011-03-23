@@ -3,7 +3,7 @@
  *
  * Copyright (c) 2009 Richard Chamorro
  * Licensed under the MIT license
- *
+ * 
  * Author: Richard Chamorro 
  */
  
@@ -14,7 +14,10 @@
 			$.fn.oembed.settings = $.extend(true, $.fn.oembed.defaults, options);
 		else
 			$.fn.oembed.settings = $.fn.oembed.defaults;
+			
+		initializeProviders();			
 
+		
 		return this.each(function () {
 
 			var container = $(this),
@@ -24,37 +27,36 @@
 			if (!callback) callback = $.fn.oembed.defaultCallbackFunction;
 
 			if (resourceURL != null) {
-				provider = getOEmbedProvider(resourceURL);
+				provider = getOEmbedProvider(resourceURL);			
 
-				if (provider == null) {
-					provider = getDefaultOEmbedProvider($.fn.oembed.settings.defaultOEmbedProvider);
+				if (provider != null) {
+					provider.params = getNormalizedParams($.fn.oembed.settings[provider.name]) || {};
+					provider.maxWidth = $.fn.oembed.settings.maxWidth;
+					provider.maxHeight = $.fn.oembed.settings.maxHeight;					
+					
+					$.fn.oembed.embedCode(container, resourceURL, provider, callback);
 				}
-
-				provider.params = getNormalizedParams($.fn.oembed.settings[provider.name]) || {};
-				provider.maxWidth = $.fn.oembed.settings.maxWidth;
-				provider.maxHeight = $.fn.oembed.settings.maxHeight;
-
-				$.fn.oembed.embedCode(provider, container, resourceURL, callback);
 
 				return;
 			}
 
-			callback(container, null);
+			callback(container, null, provider);
 		});
 	};
+	
+	var activeProviders = [];
 
 	// Plugin defaults
 	$.fn.oembed.defaults = {
 		maxWidth: null,
-		maxHeight: null,
-		transparentVideo: false,
-		embedMethod: "replace",  // "auto", "append", "fill"		
-		defaultOEmbedProvider: "oohembed", // "oohembed", "embed.ly",
-		allowedProviders: [],
-		forbiddenProvider: [],
+		maxHeight: null,		
+		embedMethod: "replace",  	// "auto", "append", "fill"		
+		defaultOEmbedProvider: "oohembed", 	// "oohembed", "embed.ly", "none"
+		allowedProviders: null,
+		disallowedProviders: null,
+		customProviders: null,	// [ new OEmbedProvider("customprovider", ["customprovider\\.com/watch.+v=[\\w-]+&?"]) ]	
 		wmode: null,
-		onSuccess: function () { },
-		onProviderNotFound: function () { }
+		greedy: true
 	};
 
 	$.fn.oembed.getRequestUrl = function (provider, externalUrl) {
@@ -84,14 +86,16 @@
 				qs += "&" + escape(i) + "=" + provider.params[i];
 		}
 
+		var callbackparameter = provider.callbackparameter || "callback";
+		
 		url += "format=json&url=" + escape(externalUrl) +
 					qs +
-					"&" + provider.callbackparameter + "=?";
+					"&" + callbackparameter + "=?";
 
 		return url;
 	};
-
-	$.fn.oembed.embedCode = function (provider, container, externalUrl, callback) {
+	
+	$.fn.oembed.embedCode = function (container, externalUrl, provider, callback) {
 
 		var request = $.fn.oembed.getRequestUrl(provider, externalUrl);
 
@@ -115,7 +119,7 @@
 					break;
 			}
 
-			callback(container, oembed);
+			callback(container, oembed, provider);
 		});
 	};
 
@@ -125,7 +129,7 @@
 	$.fn.oembed.insertCode = function (container, embedMethod, oembed) {
 		if (oembed == null)
 			return;
-
+			
 		switch (embedMethod) {
 			case "auto":
 				if (container.attr("href") != null) {
@@ -197,23 +201,71 @@
 
 	/* Private Methods */
 	function getOEmbedProvider(url) {
-		for (var i = 0; i < providers.length; i++) {
-			if (providers[i].matches(url))
-				return providers[i];
+		for (var i = 0; i < activeProviders.length; i++) {			
+			if (activeProviders[i].matches(url))
+				return activeProviders[i];
 		}
 		return null;
+	}
+	
+	function initializeProviders(allowedProviders, disallowedProviders, customProviders) {
+
+		activeProviders = [];
+		
+		if (!isNullOrEmpty($.fn.oembed.settings.allowedProviders)) {
+			for(i = 0; i < providers.length; i++) {
+				if ($.inArray(providers[i].name, $.fn.oembed.settings.allowedProviders) >= 0)				
+					activeProviders.push(providers[i]);
+			}
+			// If there are allowed providers, jquery-oembed cannot be greedy
+			$.fn.oembed.settings.greedy = false;
+			
+		} else {
+			activeProviders = providers;
+		}
+		
+		if (!isNullOrEmpty($.fn.oembed.settings.disallowedProviders)) {
+			var restrictedProviders = [];			
+			for(i = 0; i < activeProviders.length; i++) {
+				if ($.inArray(activeProviders[i].name, $.fn.oembed.settings.disallowedProviders) < 0)				
+					restrictedProviders.push(activeProviders[i]);				
+			}			
+			activeProviders = restrictedProviders;
+			
+			// If there are allowed providers, jquery-oembed cannot be greedy
+			$.fn.oembed.settings.greedy = false;
+		}		
+		
+		if (!isNullOrEmpty($.fn.oembed.settings.customProviders)) {			
+			$.each($.fn.oembed.settings.customProviders, function(i, customProvider){				
+				if (customProvider instanceof OEmbedProvider) {
+					activeProviders.push(provider);
+				} else {
+					provider = new OEmbedProvider();
+					if (provider.fromJSON(customProvider))
+						activeProviders.push(provider);
+				}				
+			});			
+		}	
+
+		// If in greedy mode, we create
+		if ($.fn.oembed.settings.greedy == true) {
+			var defaultProvider = new OEmbedProvider($.fn.oembed.settings.defaultOEmbedProvider, null, getDefaultOEmbedProviderUrl($.fn.oembed.settings.defaultOEmbedProvider), "callback");
+			activeProviders.push(defaultProvider);
+		}		
 	}
 
 	$.fn.oembed.defaultCallbackFunction = function (container, oembed) {
 		$.fn.oembed.insertCode(container, $.fn.oembed.settings.embedMethod, oembed);
 	}
 
-
 	function getDefaultOEmbedProvider(defaultOEmbedProvider) {
 		return new OEmbedProvider(defaultOEmbedProvider, null, getDefaultOEmbedProviderUrl(defaultOEmbedProvider), "callback");
 	}
 
 	function getDefaultOEmbedProviderUrl(defaultOEmbedProvider) {
+		if (defaultOEmbedProvider == "none")
+			return null;
 		if (defaultOEmbedProvider == "embed.ly")
 			return "http://api.embed.ly/v1/api/oembed?";
 		return "http://oohembed.com/oohembed/";
@@ -231,6 +283,15 @@
 		return normalizedParams;
 	}
 
+	function isNullOrEmpty(object) {
+		if (typeof object == "undefined")
+			return true;
+		if (object == null)
+			return true;
+		if ($.isArray(object) && object.length == 0)
+			return true;
+		return false;
+	}
 
 	var providers = [
 		new OEmbedProvider("youtube", ["youtube\\.com/watch.+v=[\\w-]+&?"]),
@@ -256,27 +317,42 @@
 		new OEmbedProvider("viddler", ["viddler\.com"]),
 		new OEmbedProvider("wordpress", ["wordpress\.com"])
 
-
 	];
 
 
 	function OEmbedProvider(name, urlschemes, apiendpoint, callbackparameter) {
 		this.name = name;
-		this.urlschemes = urlschemes;
+		this.urlschemes = getUrlSchemes(urlschemes);
 		this.apiendpoint = apiendpoint;
-		this.callbackparameter = (callbackparameter != null) ? callbackparameter : "callback";
+		this.callbackparameter = callbackparameter;
 		this.maxWidth = 500;
 		this.maxHeight = 400;
 
 		this.matches = function (externalUrl) {
 			for (var i = 0; i < this.urlschemes.length; i++) {
-				var regExp = new RegExp(urlschemes[i], "i");
+				var regExp = new RegExp(this.urlschemes[i], "i");
 				if (externalUrl.match(regExp) != null)
 					return true;
 			}
 			return false;
 		};
-
-
+		
+		this.fromJSON = function(json) {
+			for(var property in json){
+				if (property != "urlschemes")				
+	        		this[property] = json[property];
+				else
+					this[property] = getUrlSchemes(json[property])
+    		}		
+			return true; 	
+		};
+		
+		function getUrlSchemes(urls) {
+			if (isNullOrEmpty(urls))
+				return ["*"];
+			if ($.isArray(urls))
+				return urls;
+			return urls.split(";");			
+		}
 	}
 })(jQuery);
