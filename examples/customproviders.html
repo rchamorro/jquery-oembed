@@ -9,7 +9,14 @@
 <body>
 <script type="text/javascript">
 	$(document).ready(function() {
-		$(".oembed").oembed(null, { greedy: false, customProviders: [new OEmbedProvider("streetfire.net", ["streetfire\\.net\/video\/.*"], "http://api.embed.ly/v1/api/oembed?")] });
+		$(".oembed").oembed(null, {
+			greedy: false,
+			customProviders: [{
+				"name": "streetfire.net",
+				"urlschemes": ["streetfire\\.net\/video\/.*"],
+				"apiendpoint": "http://api.embed.ly/v1/api/oembed?"
+			}]
+		});
 	});
 </script>
 <div><a href="http://www.streetfire.net/video/supra-wrecks-a-supra_2219480.htm" class="oembed">Custom provider video (streetfire)</a></div>
