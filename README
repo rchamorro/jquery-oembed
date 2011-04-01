@@ -1,18 +1,17 @@
 == jquery-oembed ChangeLog ==
 
 == 1.1.0 RC ==
-* Added Slideshare native oembed API support (patch by jaipandya)
-* Added Photobucket native oembed API support
-* Added blip.tv native oembed API support
-** Added option to include wmode parameter on videos
+* Slideshare native oembed API support (patch by jaipandya)
+* Photobucket native oembed API support
+* Blip.tv native oembed API support
+* Removed providers that are not working (myspace, screenr, qik, revision3)
 * Use regex to detect URLs using the regular expressions provided by http://oohembed.com/static/endpoints.json
 ** Added callback function when specific provider is not found
-** Added
-* Added support to embed.ly generic oembed provider.
-** Added support to jquery up to version 1.5
-** Added simple feature examples
-** Addes providers tests
-
+* Added beforeEmbed and afterEmbed functions
+* Support to embed.ly generic oembed provider.
+* Support to jquery up to version 1.5
+* Added features examples
+* Added supported providers tests
 * BugFix: Incorrect use of $.extend (recommended by rformato)
 
 == 1.0.5 ==

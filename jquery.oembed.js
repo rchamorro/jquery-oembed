@@ -8,43 +8,47 @@
  */
  
 (function ($, undefined) {
-	$.fn.oembed = function (url, options, callback) {
+	$.fn.oembed = function (url, options, embedAction) {
 
-		if (typeof options != "undefined")
-			$.fn.oembed.settings = $.extend(true, $.fn.oembed.defaults, options);
-		else
-			$.fn.oembed.settings = $.fn.oembed.defaults;
+		settings = $.extend(true, $.fn.oembed.defaults, options);		
 			
-		initializeProviders();			
-
+		initializeProviders();
 		
-		return this.each(function () {
+		return this.each(function () {		
 
 			var container = $(this),
 				resourceURL = (url != null) ? url : container.attr("href"),
-				provider;
-
-			if (!callback) callback = $.fn.oembed.defaultCallbackFunction;
+				provider;					
+			
+			if (embedAction) {
+				settings.onEmbed = embedAction;
+			} else {
+				settings.onEmbed = function(oembedData) {			
+						$.fn.oembed.insertCode(this, settings.embedMethod, oembedData);
+				};
+			}
 
 			if (resourceURL != null) {
 				provider = getOEmbedProvider(resourceURL);			
 
 				if (provider != null) {
-					provider.params = getNormalizedParams($.fn.oembed.settings[provider.name]) || {};
-					provider.maxWidth = $.fn.oembed.settings.maxWidth;
-					provider.maxHeight = $.fn.oembed.settings.maxHeight;					
+					provider.params = getNormalizedParams(settings[provider.name]) || {};
+					provider.maxWidth = settings.maxWidth;
+					provider.maxHeight = settings.maxHeight;					
 					
-					$.fn.oembed.embedCode(container, resourceURL, provider, callback);
+					embedCode(container, resourceURL, provider);
+				} else {				
+					settings.onProviderNotFound.call(container, resourceURL);
 				}
-
-				return;
+					
+				return container;
 			}
-
-			callback(container, null, provider);
 		});
+	
+		
 	};
 	
-	var activeProviders = [];
+	var settings, activeProviders = [];
 
 	// Plugin defaults
 	$.fn.oembed.defaults = {
@@ -54,21 +58,25 @@
 		defaultOEmbedProvider: "oohembed", 	// "oohembed", "embed.ly", "none"
 		allowedProviders: null,
 		disallowedProviders: null,
-		customProviders: null,	// [ new OEmbedProvider("customprovider", ["customprovider\\.com/watch.+v=[\\w-]+&?"]) ]	
-		wmode: null,
-		greedy: true
+		customProviders: null,	// [ new $.fn.oembed.OEmbedProvider("customprovider", null, ["customprovider\\.com/watch.+v=[\\w-]+&?"]) ]	
+		defaultProvider: null,		
+		greedy: true,			
+		onProviderNotFound: function() {},
+		beforeEmbed: function() {},		
+		afterEmbed: function() {},
+		onEmbed: function() {}
+		
 	};
 
-	$.fn.oembed.getRequestUrl = function (provider, externalUrl) {
+	/* Private functions */	
+	function getRequestUrl (provider, externalUrl) {
 
-		var url = provider.apiendpoint || getDefaultOEmbedProviderUrl($.fn.oembed.settings.defaultOEmbedProvider);
+		var url = provider.apiendpoint, qs = "", callbackparameter = provider.callbackparameter || "callback", i;
 
 		if (url.indexOf("?") <= 0)
 			url = url + "?";
 		else
-			url = url + "&";
-
-		var qs = "";
+			url = url + "&";		
 
 		if (provider.maxWidth != null && provider.params["maxwidth"] == null)
 			provider.params["maxwidth"] = provider.maxWidth;
@@ -76,7 +84,7 @@
 		if (provider.maxHeight != null && provider.params["maxheight"] == null)
 			provider.params["maxheight"] = provider.maxHeight;
 
-		for (var i in provider.params) {
+		for (i in provider.params) {
 			// We don't want them to jack everything up by changing the callback parameter
 			if (i == provider.callbackparameter)
 				continue;
@@ -84,9 +92,7 @@
 			// allows the options to be set to null, don't send null values to the server as parameters
 			if (provider.params[i] != null)
 				qs += "&" + escape(i) + "=" + provider.params[i];
-		}
-
-		var callbackparameter = provider.callbackparameter || "callback";
+		}	
 		
 		url += "format=json&url=" + escape(externalUrl) +
 					qs +
@@ -95,111 +101,38 @@
 		return url;
 	};
 	
-	$.fn.oembed.embedCode = function (container, externalUrl, provider, callback) {
+	function embedCode(container, externalUrl, embedProvider) {
 
-		var request = $.fn.oembed.getRequestUrl(provider, externalUrl);
+		var requestUrl = getRequestUrl(embedProvider, externalUrl);
 
-		$.getJSON(request, function (data) {
+		$.getJSON(requestUrl, function (data) {
 
-			var oembed = $.extend({}, data);
-			var type = oembed.type;
+			var oembedData = $.extend({}, data);			
 
-			switch (type) {
+			switch (oembedData.type) {
 				case "photo":
-					oembed.code = $.fn.oembed.getPhotoCode(externalUrl, data);
+					oembedData.code = $.fn.oembed.getPhotoCode(externalUrl, oembedData);
 					break;
 				case "video":
-					oembed.code = $.fn.oembed.getVideoCode(externalUrl, data);
+					oembedData.code = $.fn.oembed.getVideoCode(externalUrl, oembedData);
 					break;
 				case "rich":
-					oembed.code = $.fn.oembed.getRichCode(externalUrl, data);
+					oembedData.code = $.fn.oembed.getRichCode(externalUrl, oembedData);
 					break;
 				default:
-					oembed.code = $.fn.oembed.getGenericCode(externalUrl, data);
+					oembedData.code = $.fn.oembed.getGenericCode(externalUrl, oembedData);
 					break;
 			}
-
-			callback(container, oembed, provider);
+			
+			settings.beforeEmbed.call(container, oembedData);
+			
+			settings.onEmbed.call(container, oembedData);
+				
+			settings.afterEmbed.call(container, oembedData);			
+				
 		});
 	};
 
-	// Plugin options
-	$.fn.oembed.settings = {};
-
-	$.fn.oembed.insertCode = function (container, embedMethod, oembed) {
-		if (oembed == null)
-			return;
-			
-		switch (embedMethod) {
-			case "auto":
-				if (container.attr("href") != null) {
-					$.fn.oembed.insertCode(container, "append", oembed);
-				}
-				else {
-					$.fn.oembed.insertCode(container, "replace", oembed);
-				};
-				break;
-			case "replace":
-				container.replaceWith(oembed.code);
-				break;
-			case "fill":
-				container.html(oembed.code);
-				break;
-			case "append":
-				var oembedContainer = container.next();
-				if (oembedContainer == null || !oembedContainer.hasClass("oembed-container")) {
-					oembedContainer = container
-						.after('<div class="oembed-container"></div>')
-						.next(".oembed-container");
-					if (oembed != null && oembed.provider_name != null)
-						oembedContainer.toggleClass("oembed-container-" + oembed.provider_name);
-				}
-				oembedContainer.html(oembed.code);
-				break;
-		}
-	};
-
-	$.fn.oembed.getPhotoCode = function (url, data) {
-		var alt = data.title ? data.title : '';
-		alt += data.author_name ? ' - ' + data.author_name : '';
-		alt += data.provider_name ? ' - ' + data.provider_name : '';
-		var code = '<div><a href="' + url + '" target=\'_blank\'><img src="' + data.url + '" alt="' + alt + '"/></a></div>';
-		if (data.html)
-			code += "<div>" + data.html + "</div>";
-		return code;
-	};
-
-	$.fn.oembed.getVideoCode = function (url, data) {
-		var code = data.html;
-
-		/*
-		if (code != null && options.insertwmode == true && oembed.code.indexOf("wmode") < 0) {			
-		code = code.replace("<embed ", "<param name=\"wmode\" value=\"transparent\"></param>\n<embed ");
-		code = code.replace("<embed ", "<embed wmode=\"transparent\"");			
-		}
-		*/
-		return code;
-	};
-
-	$.fn.oembed.getRichCode = function (url, data) {
-		var code = data.html;
-		return code;
-	};
-
-	$.fn.oembed.getGenericCode = function (url, data) {
-		var title = (data.title != null) ? data.title : url,
-			code = '<a href="' + url + '">' + title + '</a>';
-		if (data.html)
-			code += "<div>" + data.html + "</div>";
-		return code;
-	};
-
-	$.fn.oembed.isAvailable = function (url) {
-		var provider = getOEmbedProvider(url);
-		return (provider != null);
-	};
-
-	/* Private Methods */
 	function getOEmbedProvider(url) {
 		for (var i = 0; i < activeProviders.length; i++) {			
 			if (activeProviders[i].matches(url))
@@ -208,75 +141,73 @@
 		return null;
 	}
 	
-	function initializeProviders(allowedProviders, disallowedProviders, customProviders) {
+	function initializeProviders() {
 
 		activeProviders = [];
 		
-		if (!isNullOrEmpty($.fn.oembed.settings.allowedProviders)) {
-			for(i = 0; i < providers.length; i++) {
-				if ($.inArray(providers[i].name, $.fn.oembed.settings.allowedProviders) >= 0)				
-					activeProviders.push(providers[i]);
+		var defaultProvider, restrictedProviders = [];
+		
+		if (!isNullOrEmpty(settings.allowedProviders)) {
+			for(i = 0; i < $.fn.oembed.providers.length; i++) {
+				if ($.inArray($.fn.oembed.providers[i].name, settings.allowedProviders) >= 0)				
+					activeProviders.push($.fn.oembed.providers[i]);
 			}
 			// If there are allowed providers, jquery-oembed cannot be greedy
-			$.fn.oembed.settings.greedy = false;
+			settings.greedy = false;
 			
 		} else {
-			activeProviders = providers;
+			activeProviders = $.fn.oembed.providers;
 		}
 		
-		if (!isNullOrEmpty($.fn.oembed.settings.disallowedProviders)) {
-			var restrictedProviders = [];			
+		if (!isNullOrEmpty(settings.disallowedProviders)) {			
 			for(i = 0; i < activeProviders.length; i++) {
-				if ($.inArray(activeProviders[i].name, $.fn.oembed.settings.disallowedProviders) < 0)				
+				if ($.inArray(activeProviders[i].name, settings.disallowedProviders) < 0)				
 					restrictedProviders.push(activeProviders[i]);				
 			}			
 			activeProviders = restrictedProviders;
 			
 			// If there are allowed providers, jquery-oembed cannot be greedy
-			$.fn.oembed.settings.greedy = false;
+			settings.greedy = false;
 		}		
 		
-		if (!isNullOrEmpty($.fn.oembed.settings.customProviders)) {			
-			$.each($.fn.oembed.settings.customProviders, function(i, customProvider){				
-				if (customProvider instanceof OEmbedProvider) {
+		if (!isNullOrEmpty(settings.customProviders)) {			
+			$.each(settings.customProviders, function(i, customProvider){				
+				if (customProvider instanceof $.fn.oembed.OEmbedProvider) {
 					activeProviders.push(provider);
 				} else {
-					provider = new OEmbedProvider();
+					provider = new $.fn.oembed.OEmbedProvider();
 					if (provider.fromJSON(customProvider))
 						activeProviders.push(provider);
 				}				
 			});			
 		}	
 
-		// If in greedy mode, we create
-		if ($.fn.oembed.settings.greedy == true) {
-			var defaultProvider = new OEmbedProvider($.fn.oembed.settings.defaultOEmbedProvider, null, getDefaultOEmbedProviderUrl($.fn.oembed.settings.defaultOEmbedProvider), "callback");
+		// If in greedy mode, we add the default provider
+		defaultProvider = getDefaultOEmbedProvider(settings.defaultOEmbedProvider);		
+		if (settings.greedy == true) {			
 			activeProviders.push(defaultProvider);
 		}		
-	}
+		
+		// If any provider has no apiendpoint, we use the default provider endpoint
+		$.each(activeProviders, function(i, activeProvider) {
+			if (activeProviders[i].apiendpoint == null)
+				activeProviders[i].apiendpoint = defaultProvider.apiendpoint;
+		});
+		
+	}	
 
-	$.fn.oembed.defaultCallbackFunction = function (container, oembed) {
-		$.fn.oembed.insertCode(container, $.fn.oembed.settings.embedMethod, oembed);
-	}
-
-	function getDefaultOEmbedProvider(defaultOEmbedProvider) {
-		return new OEmbedProvider(defaultOEmbedProvider, null, getDefaultOEmbedProviderUrl(defaultOEmbedProvider), "callback");
-	}
-
-	function getDefaultOEmbedProviderUrl(defaultOEmbedProvider) {
-		if (defaultOEmbedProvider == "none")
-			return null;
+	function getDefaultOEmbedProvider(defaultOEmbedProvider) {	
+		var url = "http://oohembed.com/oohembed/";
 		if (defaultOEmbedProvider == "embed.ly")
-			return "http://api.embed.ly/v1/api/oembed?";
-		return "http://oohembed.com/oohembed/";
+			url = "http://api.embed.ly/v1/api/oembed?";
+		return new $.fn.oembed.OEmbedProvider(defaultOEmbedProvider, null, null, url, "callback");
 	}
-
 
 	function getNormalizedParams(params) {
 		if (params == null)
 			return null;
-		var normalizedParams = {};
-		for (var key in params) {
+		var key, normalizedParams = {};
+		for (key in params) {
 			if (key != null)
 				normalizedParams[key.toLowerCase()] = params[key];
 		}
@@ -292,45 +223,88 @@
 			return true;
 		return false;
 	}
+	
+	/* Public functions */
+	$.fn.oembed.insertCode = function (container, embedMethod, oembedData) {
+		if (oembedData == null)
+			return;
+			
+		switch (embedMethod) {
+			case "auto":
+				if (container.attr("href") != null) {
+					$.fn.oembed.insertCode(container, "append", oembedData);
+				}
+				else {
+					$.fn.oembed.insertCode(container, "replace", oembedData);
+				};
+				break;
+			case "replace":
+				container.replaceWith(oembedData.code);
+				break;
+			case "fill":
+				container.html(oembedData.code);
+				break;
+			case "append":
+				var oembedContainer = container.next();
+				if (oembedContainer == null || !oembedContainer.hasClass("oembed-container")) {
+					oembedContainer = container
+						.after('<div class="oembed-container"></div>')
+						.next(".oembed-container");
+					if (oembedData != null && oembedData.provider_name != null)
+						oembedContainer.toggleClass("oembed-container-" + oembedData.provider_name);
+				}
+				oembedContainer.html(oembedData.code);
+				break;
+		}
+	};
 
-	var providers = [
-		new OEmbedProvider("youtube", ["youtube\\.com/watch.+v=[\\w-]+&?"]),
-		new OEmbedProvider("flickr", ["flickr\\.com/photos/[-.\\w@]+/\\d+/?"], "http://flickr.com/services/oembed", "jsoncallback"),
-		new OEmbedProvider("slideshare", ["slideshare\.net"], "http://www.slideshare.net/api/oembed/1"),
-		new OEmbedProvider("scribd", ["scribd\\.com/.+"], "http://www.scribd.com/services/oembed"),
-		new OEmbedProvider("vimeo", ["http:\/\/www\.vimeo\.com\/groups\/.*\/videos\/.*", "http:\/\/www\.vimeo\.com\/.*", "http:\/\/vimeo\.com\/groups\/.*\/videos\/.*", "http:\/\/vimeo\.com\/.*"], "http://vimeo.com/api/oembed.json"),
-		new OEmbedProvider("vids.myspace.com", ["vids\.myspace\.com"], "http://vids.myspace.com/index.cfm?fuseaction=oembed"),
-		new OEmbedProvider("photobucket", ["photobucket\\.com/(albums|groups)/.*"], "http://photobucket.com/oembed/"),
-		new OEmbedProvider("screenr", ["screenr\.com"], "http://screenr.com/api/oembed.json"),
-		new OEmbedProvider("blip", ["blip\\.tv/.+"], "http://blip.tv/oembed/"),
-		new OEmbedProvider("dailymotion", ["dailymotion\\.com/.+"], "http://www.dailymotion.com/api/oembed/"),
-		new OEmbedProvider("googlevideo", ["video\.google\."]),
-		new OEmbedProvider("wikipedia", ["http:\/\/wikipedia\.org\/wiki\/.*"]),
-		new OEmbedProvider("fivemin", ["http://www.5min.com/video/*"]),
-		new OEmbedProvider("amazon", ["amazon\.com"]),
-		new OEmbedProvider("hulu", ["hulu\\.com/watch/.*"]),
-		new OEmbedProvider("imdb", ["imdb\.com"]),
-		new OEmbedProvider("metacafe", ["metacafe\.com"]),
-		new OEmbedProvider("qik", ["qik\\.com/\\w+"]),
-		new OEmbedProvider("revision3", ["revision3\.com"]),
-		new OEmbedProvider("twitpic", ["twitpic\.com"]),
-		new OEmbedProvider("viddler", ["viddler\.com"]),
-		new OEmbedProvider("wordpress", ["wordpress\.com"])
+	$.fn.oembed.getPhotoCode = function (url, oembedData) {
+		var code, alt = oembedData.title ? oembedData.title : '';
+		alt += oembedData.author_name ? ' - ' +oembedData.author_name : '';
+		alt += oembedData.provider_name ? ' - ' + oembedData.provider_name : '';
+		code = '<div><a href="' + url + '" target=\'_blank\'><img src="' + oembedData.url + '" alt="' + alt + '"/></a></div>';
+		if (oembedData.html)
+			code += "<div>" + oembedData.html + "</div>";
+		return code;
+	};
 
-	];
+	$.fn.oembed.getVideoCode = function (url, oembedData) {
+		var code = oembedData.html;
+		
+		return code;
+	};
 
+	$.fn.oembed.getRichCode = function (url, oembedData) {
+		var code = oembedData.html;
+		return code;
+	};
 
-	function OEmbedProvider(name, urlschemes, apiendpoint, callbackparameter) {
+	$.fn.oembed.getGenericCode = function (url, oembedData) {
+		var title = (oembedData.title != null) ? oembedData.title : url,
+			code = '<a href="' + url + '">' + title + '</a>';
+		if (oembedData.html)
+			code += "<div>" + oembedData.html + "</div>";
+		return code;
+	};
+
+	$.fn.oembed.isProviderAvailable = function (url) {
+		var provider = getOEmbedProvider(url);
+		return (provider != null);
+	};
+
+	$.fn.oembed.OEmbedProvider = function(name, type, urlschemes, apiendpoint, callbackparameter) {
 		this.name = name;
+		this.type = type; // "photo", "video", "link", "rich", null
 		this.urlschemes = getUrlSchemes(urlschemes);
 		this.apiendpoint = apiendpoint;
 		this.callbackparameter = callbackparameter;
 		this.maxWidth = 500;
-		this.maxHeight = 400;
+		this.maxHeight = 400;		
+		var i, property, regExp;
 
 		this.matches = function (externalUrl) {
-			for (var i = 0; i < this.urlschemes.length; i++) {
-				var regExp = new RegExp(this.urlschemes[i], "i");
+			for (i = 0; i < this.urlschemes.length; i++) {
+				regExp = new RegExp(this.urlschemes[i], "i");
 				if (externalUrl.match(regExp) != null)
 					return true;
 			}
@@ -338,7 +312,7 @@
 		};
 		
 		this.fromJSON = function(json) {
-			for(var property in json){
+			for(property in json){
 				if (property != "urlschemes")				
 	        		this[property] = json[property];
 				else
@@ -349,10 +323,29 @@
 		
 		function getUrlSchemes(urls) {
 			if (isNullOrEmpty(urls))
-				return ["*"];
+				return ["."];
 			if ($.isArray(urls))
 				return urls;
 			return urls.split(";");			
 		}
 	}
+	
+	/* Native & common providers */
+	$.fn.oembed.providers =	[	
+		new $.fn.oembed.OEmbedProvider("youtube", "video", ["youtube\\.com/watch.+v=[\\w-]+&?"]), // "http://www.youtube.com/oembed"	(no jsonp)
+		new $.fn.oembed.OEmbedProvider("flickr",  "photo", ["flickr\\.com/photos/[-.\\w@]+/\\d+/?"], "http://flickr.com/services/oembed", "jsoncallback"),		
+		new $.fn.oembed.OEmbedProvider("viddler", "video", ["viddler\.com"]), // "http://lab.viddler.com/services/oembed/" (no jsonp)
+		new $.fn.oembed.OEmbedProvider("blip", "video", ["blip\\.tv/.+"], "http://blip.tv/oembed/"),
+		new $.fn.oembed.OEmbedProvider("hulu", "video", ["hulu\\.com/watch/.*"], "http://www.hulu.com/api/oembed.json"),
+		new $.fn.oembed.OEmbedProvider("vimeo", "video", ["http:\/\/www\.vimeo\.com\/groups\/.*\/videos\/.*", "http:\/\/www\.vimeo\.com\/.*", "http:\/\/vimeo\.com\/groups\/.*\/videos\/.*", "http:\/\/vimeo\.com\/.*"], "http://vimeo.com/api/oembed.json"),				
+		new $.fn.oembed.OEmbedProvider("dailymotion", "video", ["dailymotion\\.com/.+"]), // "http://www.dailymotion.com/api/oembed/" (callback parameter does not return jsonp)
+		new $.fn.oembed.OEmbedProvider("scribd", "rich", ["scribd\\.com/.+"]), // ", "http://www.scribd.com/services/oembed"" (no jsonp)		
+		new $.fn.oembed.OEmbedProvider("slideshare", "rich", ["slideshare\.net"], "http://www.slideshare.net/api/oembed/1"),
+		new $.fn.oembed.OEmbedProvider("photobucket", "photo", ["photobucket\\.com/(albums|groups)/.*"], "http://photobucket.com/oembed/")
+		// new $.fn.oembed.OEmbedProvider("vids.myspace.com", "video", ["vids\.myspace\.com"]), // "http://vids.myspace.com/index.cfm?fuseaction=oembed" (not working)
+		// new $.fn.oembed.OEmbedProvider("screenr", "rich", ["screenr\.com"], "http://screenr.com/api/oembed.json") (error)		
+		// new $.fn.oembed.OEmbedProvider("qik", "video", ["qik\\.com/\\w+"], "http://qik.com/api/oembed.json"),		
+		// new $.fn.oembed.OEmbedProvider("revision3", "video", ["revision3\.com"], "http://revision3.com/api/oembed/"),
+		
+	];
 })(jQuery);

@@ -9,11 +9,11 @@
 <body>
 <script type="text/javascript">
 	$(document).ready(function() {
-		$(".oembed").oembed(null, null, function(container, oembed, provider) {
-			container
+		$(".oembed").oembed(null, null, function(oembed, provider) {
+			this
 				.hide()
 				.after("<table><tr><td>" + oembed.code + "</td><td>" + oembed.code + "</tr></table>");
-			alert(provider.name);
+			alert(oembed.provider_name);
 		});
 	});
 </script>
