@@ -8,12 +8,12 @@
 </head>
 <body>
 <script type="text/javascript">
+	function parseOembedData(oembedData) {
+		return oembedData.code;
+	}
 	$(document).ready(function() {
-		$(".oembed").oembed(null, null, function(oembed, provider) {
-			this
-				.hide()
-				.after("<table><tr><td>" + oembed.code + "</td><td>" + oembed.code + "</tr></table>");
-			alert(oembed.provider_name);
+		$(".oembed").oembed(null, null, function(oembedData, provider) {
+			this.replaceWith("<textarea cols='70' rows='10'>" + parseOembedData(oembedData) + "</textarea>");			
 		});
 	});
 </script>

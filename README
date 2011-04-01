@@ -14,6 +14,8 @@
 * Added supported providers tests
 * BugFix: Incorrect use of $.extend (recommended by rformato)
 
+Special thanks to Sam Cole, Jai Pandy, Steve for their patches.
+
 == 1.0.5 ==
 * BugFix: Fixed slideshare & revision3 providers
 * BugFix: Problem with the "auto" insert method.
