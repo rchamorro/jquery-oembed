@@ -64,6 +64,7 @@
         beforeEmbed: function () { },
         afterEmbed: function () { },
         onEmbed: function () { },
+		onError: function() {},
 		ajaxOptions: {}
     };
 
@@ -128,7 +129,8 @@
 				settings.beforeEmbed.call(container, oembedData);
 				settings.onEmbed.call(container, oembedData);
 				settings.afterEmbed.call(container, oembedData);
-			}
+			},
+			error: settings.onError.call(container, externalUrl, embedProvider)
 		}, settings.ajaxOptions || { } );
 		
 		$.ajax( ajaxopts );        
