@@ -103,35 +103,34 @@
 
     function embedCode(container, externalUrl, embedProvider) {
 
-        var requestUrl = getRequestUrl(embedProvider, externalUrl);
-		
-		var ajaxopts = $.extend({
-			url: requestUrl,
-			type: 'get',
-			dataType: 'json',
-			// error: jsonp request doesnt' support error handling
-			success:  function (data) {
-				var oembedData = $.extend({}, data);
-				switch (oembedData.type) {
-					case "photo":
-						oembedData.code = $.fn.oembed.getPhotoCode(externalUrl, oembedData);
-						break;
-					case "video":
-						oembedData.code = $.fn.oembed.getVideoCode(externalUrl, oembedData);
-						break;
-					case "rich":
-						oembedData.code = $.fn.oembed.getRichCode(externalUrl, oembedData);
-						break;
-					default:
-						oembedData.code = $.fn.oembed.getGenericCode(externalUrl, oembedData);
-						break;
-				}
-				settings.beforeEmbed.call(container, oembedData);
-				settings.onEmbed.call(container, oembedData);
-				settings.afterEmbed.call(container, oembedData);
-			},
-			error: settings.onError.call(container, externalUrl, embedProvider)
-		}, settings.ajaxOptions || { } );
+        var requestUrl = getRequestUrl(embedProvider, externalUrl), 		
+			ajaxopts = $.extend({
+				url: requestUrl,
+				type: 'get',
+				dataType: 'json',
+				// error: jsonp request doesnt' support error handling
+				success:  function (data) {
+					var oembedData = $.extend({}, data);
+					switch (oembedData.type) {
+						case "photo":
+							oembedData.code = $.fn.oembed.getPhotoCode(externalUrl, oembedData);
+							break;
+						case "video":
+							oembedData.code = $.fn.oembed.getVideoCode(externalUrl, oembedData);
+							break;
+						case "rich":
+							oembedData.code = $.fn.oembed.getRichCode(externalUrl, oembedData);
+							break;
+						default:
+							oembedData.code = $.fn.oembed.getGenericCode(externalUrl, oembedData);
+							break;
+					}
+					settings.beforeEmbed.call(container, oembedData);
+					settings.onEmbed.call(container, oembedData);
+					settings.afterEmbed.call(container, oembedData);
+				},
+				error: settings.onError.call(container, externalUrl, embedProvider)
+			}, settings.ajaxOptions || { } );
 		
 		$.ajax( ajaxopts );        
     };
