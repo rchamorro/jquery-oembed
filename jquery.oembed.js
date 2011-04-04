@@ -35,7 +35,6 @@
                     provider.params = getNormalizedParams(settings[provider.name]) || {};
                     provider.maxWidth = settings.maxWidth;
                     provider.maxHeight = settings.maxHeight;
-
                     embedCode(container, resourceURL, provider);
                 } else {
                     settings.onProviderNotFound.call(container, resourceURL);
@@ -64,8 +63,8 @@
         onProviderNotFound: function () { },
         beforeEmbed: function () { },
         afterEmbed: function () { },
-        onEmbed: function () { }
-
+        onEmbed: function () { },
+		ajaxOptions: {}
     };
 
     /* Private functions */
@@ -104,33 +103,35 @@
     function embedCode(container, externalUrl, embedProvider) {
 
         var requestUrl = getRequestUrl(embedProvider, externalUrl);
-
-        $.getJSON(requestUrl, function (data) {
-
-            var oembedData = $.extend({}, data);
-
-            switch (oembedData.type) {
-                case "photo":
-                    oembedData.code = $.fn.oembed.getPhotoCode(externalUrl, oembedData);
-                    break;
-                case "video":
-                    oembedData.code = $.fn.oembed.getVideoCode(externalUrl, oembedData);
-                    break;
-                case "rich":
-                    oembedData.code = $.fn.oembed.getRichCode(externalUrl, oembedData);
-                    break;
-                default:
-                    oembedData.code = $.fn.oembed.getGenericCode(externalUrl, oembedData);
-                    break;
-            }
-
-            settings.beforeEmbed.call(container, oembedData);
-
-            settings.onEmbed.call(container, oembedData);
-
-            settings.afterEmbed.call(container, oembedData);
-
-        });
+		
+		var ajaxopts = $.extend({
+			url: requestUrl,
+			type: 'get',
+			dataType: 'json',
+			// error: jsonp request doesnt' support error handling
+			success:  function (data) {
+				var oembedData = $.extend({}, data);
+				switch (oembedData.type) {
+					case "photo":
+						oembedData.code = $.fn.oembed.getPhotoCode(externalUrl, oembedData);
+						break;
+					case "video":
+						oembedData.code = $.fn.oembed.getVideoCode(externalUrl, oembedData);
+						break;
+					case "rich":
+						oembedData.code = $.fn.oembed.getRichCode(externalUrl, oembedData);
+						break;
+					default:
+						oembedData.code = $.fn.oembed.getGenericCode(externalUrl, oembedData);
+						break;
+				}
+				settings.beforeEmbed.call(container, oembedData);
+				settings.onEmbed.call(container, oembedData);
+				settings.afterEmbed.call(container, oembedData);
+			}
+		}, settings.ajaxOptions || { } );
+		
+		$.ajax( ajaxopts );        
     };
 
     function initializeProviders() {
@@ -157,7 +158,6 @@
                     restrictedProviders.push(activeProviders[i]);
             }
             activeProviders = restrictedProviders;
-
             // If there are allowed providers, jquery-oembed cannot be greedy
             settings.greedy = false;
         }
@@ -178,8 +178,7 @@
         defaultProvider = getDefaultOEmbedProvider(settings.defaultOEmbedProvider);
         if (settings.greedy == true) {
             activeProviders.push(defaultProvider);
-        }
-
+		}
         // If any provider has no apiendpoint, we use the default provider endpoint
         for (i = 0; i < activeProviders.length; i++) {
             if (activeProviders[i].apiendpoint == null)
@@ -341,10 +340,9 @@
 		new $.fn.oembed.OEmbedProvider("scribd", "rich", ["scribd\\.com/.+"]), // ", "http://www.scribd.com/services/oembed"" (no jsonp)		
 		new $.fn.oembed.OEmbedProvider("slideshare", "rich", ["slideshare\.net"], "http://www.slideshare.net/api/oembed/1"),
 		new $.fn.oembed.OEmbedProvider("photobucket", "photo", ["photobucket\\.com/(albums|groups)/.*"], "http://photobucket.com/oembed/")
-    // new $.fn.oembed.OEmbedProvider("vids.myspace.com", "video", ["vids\.myspace\.com"]), // "http://vids.myspace.com/index.cfm?fuseaction=oembed" (not working)
-    // new $.fn.oembed.OEmbedProvider("screenr", "rich", ["screenr\.com"], "http://screenr.com/api/oembed.json") (error)		
-    // new $.fn.oembed.OEmbedProvider("qik", "video", ["qik\\.com/\\w+"], "http://qik.com/api/oembed.json"),		
-    // new $.fn.oembed.OEmbedProvider("revision3", "video", ["revision3\.com"], "http://revision3.com/api/oembed/"),
-
+		// new $.fn.oembed.OEmbedProvider("vids.myspace.com", "video", ["vids\.myspace\.com"]), // "http://vids.myspace.com/index.cfm?fuseaction=oembed" (not working)
+		// new $.fn.oembed.OEmbedProvider("screenr", "rich", ["screenr\.com"], "http://screenr.com/api/oembed.json") (error)		
+		// new $.fn.oembed.OEmbedProvider("qik", "video", ["qik\\.com/\\w+"], "http://qik.com/api/oembed.json"),		
+		// new $.fn.oembed.OEmbedProvider("revision3", "video", ["revision3\.com"], "http://revision3.com/api/oembed/")
 	];
 })(jQuery);
