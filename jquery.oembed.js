@@ -160,11 +160,12 @@
     new OEmbedProvider("screenr", "screenr.com", "http://screenr.com/api/oembed.json")
   ];
 
-  function OEmbedProvider(name, urlPattern, oEmbedUrl, callbackparameter) {
+  function OEmbedProvider(name, urlPattern, oEmbedUrl, callbackparameter, format) {
     this.name = name;
     this.urlPattern = urlPattern;
     this.oEmbedUrl = oEmbedUrl ? oEmbedUrl : "http://oohembed.com/oohembed/";
     this.callbackparameter = callbackparameter ? callbackparameter : "callback";
+    this.format = format ? format : 'json';
     this.maxWidth = 500;
     this.maxHeight = 400;
 
@@ -200,7 +201,7 @@
           qs += "&" + escape(i) + "=" + this.params[i];
       }
 
-      url += "format=json&url=" + escape(externalUrl) +
+      url += "format=" + this.format + "&url=" + escape(externalUrl) +
         qs +
         "&" + this.callbackparameter + "=?";
 
