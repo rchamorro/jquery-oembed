@@ -157,7 +157,8 @@
     new OEmbedProvider("wordpress", "wordpress.com"),
     new OEmbedProvider("youtube", "youtube.com"),
     new OEmbedProvider("vids.myspace.com", "vids.myspace.com", "http://vids.myspace.com/index.cfm?fuseaction=oembed"),
-    new OEmbedProvider("screenr", "screenr.com", "http://screenr.com/api/oembed.json")
+    new OEmbedProvider("screenr", "screenr.com", "http://screenr.com/api/oembed.json"),
+    new OEmbedProvider("soundcloud", "soundcloud.com", "http://soundcloud.com/oembed", false, 'js')
   ];
 
   function OEmbedProvider(name, urlPattern, oEmbedUrl, callbackparameter, format) {
