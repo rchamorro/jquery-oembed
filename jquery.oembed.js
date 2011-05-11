@@ -212,28 +212,34 @@
     this.embedCode = function(container, externalUrl, callback) {
       var request = this.getRequestUrl(externalUrl);
 
-      $.getJSON(request, function(data) {
+      $.ajax({
+        url: request,
+        dataType: 'json',
+        success: function(data) {
+          var oembed = $.extend({}, data);
 
-        var oembed = $.extend({}, data);
+          var code, type = data.type;
 
-        var code, type = data.type;
+          switch (type) {
+            case "photo":
+              oembed.code = $.fn.oembed.getPhotoCode(externalUrl, data);
+              break;
+            case "video":
+              oembed.code = $.fn.oembed.getVideoCode(externalUrl, data);
+              break;
+            case "rich":
+              oembed.code = $.fn.oembed.getRichCode(externalUrl, data);
+              break;
+            default:
+              oembed.code = $.fn.oembed.getGenericCode(externalUrl, data);
+              break;
+          }
 
-        switch (type) {
-          case "photo":
-            oembed.code = $.fn.oembed.getPhotoCode(externalUrl, data);
-            break;
-          case "video":
-            oembed.code = $.fn.oembed.getVideoCode(externalUrl, data);
-            break;
-          case "rich":
-            oembed.code = $.fn.oembed.getRichCode(externalUrl, data);
-            break;
-          default:
-            oembed.code = $.fn.oembed.getGenericCode(externalUrl, data);
-            break;
+          callback(container, oembed);
+        },
+        error: function() {
+          callback(container, null);
         }
-
-        callback(container, oembed);
       });
     };
   }
